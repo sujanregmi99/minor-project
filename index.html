@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vibration Based Earthquake Detection Dashboard</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      background: #f4f6f8;
+      color: #222;
+    }
+
+    header {
+      background: #102a43;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 26px;
+      margin-bottom: 8px;
+    }
+
+    header p {
+      font-size: 14px;
+      color: #d9e2ec;
+    }
+
+    .container {
+      width: 92%;
+      max-width: 1200px;
+      margin: 25px auto;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+      margin-bottom: 25px;
+    }
+
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+
+    .card h3 {
+      font-size: 15px;
+      color: #555;
+      margin-bottom: 12px;
+    }
+
+    .card .value {
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .normal {
+      color: #1b8a5a;
+    }
+
+    .alert {
+      color: #d62828;
+    }
+
+    .section {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      margin-bottom: 25px;
+    }
+
+    .section h2 {
+      margin-bottom: 15px;
+      color: #102a43;
+      font-size: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+
+    th {
+      background: #f0f4f8;
+    }
+
+    .badge {
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .badge-normal {
+      background: #d8f3dc;
+      color: #1b8a5a;
+    }
+
+    .badge-alert {
+      background: #ffe5e5;
+      color: #d62828;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 18px;
+      color: #555;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vibration Based Earthquake Detection and Alert System</h1>
+    <p>Real-Time Monitoring Dashboard | ESP32 + MPU6050 + Firebase</p>
+  </header>
+
+  <div class="container">
+    <div class="cards">
+      <div class="card">
+        <h3>Device Status</h3>
+        <div id="deviceStatus" class="value normal">Online</div>
+      </div>
+
+      <div class="card">
+        <h3>Current System State</h3>
+        <div id="systemState" class="value normal">Normal</div>
+      </div>
+
+      <div class="card">
+        <h3>Current Acceleration</h3>
+        <div class="value"><span id="acceleration">0.00</span> g</div>
+      </div>
+
+      <div class="card">
+        <h3>Threshold Value</h3>
+        <div class="value"><span id="threshold">1.50</span> g</div>
+      </div>
+
+      <div class="card">
+        <h3>Total Alerts</h3>
+        <div id="totalAlerts" class="value">0</div>
+      </div>
+
+      <div class="card">
+        <h3>System Reliability</h3>
+        <div class="value"><span id="efficiency">0</span>%</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Confirmed Detection Graph</h2>
+      <canvas id="accelerationChart" height="100"></canvas>
+    </div>
+
+    <div class="section">
+      <h2>Alert History</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>S.N.</th>
+            <th>Date & Time</th>
+            <th>Acceleration</th>
+            <th>Threshold</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="alertTable">
+          <tr>
+            <td colspan="5">No alert data available</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>About This Project</h2>
+      <p>
+        This dashboard visualizes real-time vibration data collected by an MPU6050 sensor
+        connected to an ESP32 microcontroller. When the acceleration magnitude exceeds
+        the predefined threshold, the system generates local alerts using a buzzer and LED,
+        sends SMS notifications using a GSM module, and stores event data in Firebase.
+      </p>
+      <br />
+      <p>
+        The system does not predict earthquakes or calculate magnitude. It is designed as a
+        low-cost local awareness prototype for abnormal ground vibration detection.
+      </p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Minor Project Final Report | IOE, Paschimanchal Campus
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    // Replace this with your Firebase project config
+     const firebaseConfig = {
+  apiKey: "AIzaSyC_VAznxpLqoi9xiCXa1SlTNC1aLT4qrRc",
+  authDomain: "vbedas.firebaseapp.com",
+  databaseURL: "https://vbedas-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "vbedas",
+  storageBucket: "vbedas.firebasestorage.app",
+  messagingSenderId: "38863431120",
+  appId: "1:38863431120:web:7200dc3feda823673645d5",
+  measurementId: "G-J1B6QRPP9L"
+};
+
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+
+    const accelerationEl = document.getElementById("acceleration");
+    const thresholdEl = document.getElementById("threshold");
+    const systemStateEl = document.getElementById("systemState");
+    const totalAlertsEl = document.getElementById("totalAlerts");
+    const efficiencyEl = document.getElementById("efficiency");
+    const alertTable = document.getElementById("alertTable");
+
+    const ctx = document.getElementById("accelerationChart").getContext("2d");
+
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [{
+          label: "Detected Event Acceleration (g)",
+          data: [],
+          borderWidth: 2,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
+    });
+
+    // Expected Firebase structure:
+    // /latest
+    //    acceleration: 1.23
+    //    threshold: 1.5
+    //    status: "Normal" or "Alert"
+    //    timestamp: "2025-12-10 14:30:22"
+    // /events
+    //    eventId:
+    //      acceleration: 1.89
+    //      threshold: 1.5
+    //      status: "Alert" or "Confirmed Earthquake"
+    //      timestamp: "2025-12-10 14:30:22"
+    // /tests
+    //    totalTests: 20
+    //    correctDetections: 18
+
+    const latestRef = ref(database, "latest");
+    onValue(latestRef, (snapshot) => {
+      if (!snapshot.exists()) return;
+
+      const data = snapshot.val();
+      const acceleration = Number(data.acceleration || 0);
+      const threshold = Number(data.threshold || 1.5);
+      const status = data.status || "Normal";
+
+      accelerationEl.textContent = acceleration.toFixed(2);
+      thresholdEl.textContent = threshold.toFixed(2);
+      systemStateEl.textContent = status;
+
+      if (status.toLowerCase().includes("alert") || status.toLowerCase().includes("earthquake")) {
+        systemStateEl.className = "value alert";
+      } else {
+        systemStateEl.className = "value normal";
+      }
+    });
+
+    const eventsRef = ref(database, "events");
+    onValue(eventsRef, (snapshot) => {
+      if (!snapshot.exists()) return;
+
+      const events = snapshot.val();
+      const eventArray = Object.values(events).reverse();
+      totalAlertsEl.textContent = eventArray.length;
+
+      alertTable.innerHTML = "";
+
+      // Show latest 10 detection events in table
+      eventArray.slice(0, 10).forEach((event, index) => {
+        const status = event.status || "Alert";
+        const badgeClass = status.toLowerCase().includes("normal") ? "badge-normal" : "badge-alert";
+
+        alertTable.innerHTML += `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${event.timestamp || "N/A"}</td>
+            <td>${Number(event.acceleration || 0).toFixed(2)} g</td>
+            <td>${Number(event.threshold || 1.5).toFixed(2)} g</td>
+            <td><span class="badge ${badgeClass}">${status}</span></td>
+          </tr>
+        `;
+      });
+
+      // Graph ONLY confirmed/detected events, not continuous normal readings
+      const graphEvents = Object.values(events)
+        .filter(event => {
+          const status = String(event.status || "").toLowerCase();
+          return status.includes("alert") || status.includes("earthquake") || status.includes("confirmed");
+        })
+        .slice(-15);
+
+      chart.data.labels = graphEvents.map(event => event.timestamp || "Event");
+      chart.data.datasets[0].data = graphEvents.map(event => Number(event.acceleration || 0));
+      chart.update();
+    });
+
+    const testsRef = ref(database, "tests");
+    onValue(testsRef, (snapshot) => {
+      if (!snapshot.exists()) return;
+
+      const data = snapshot.val();
+      const totalTests = Number(data.totalTests || 0);
+      const correctDetections = Number(data.correctDetections || 0);
+
+      let efficiency = 0;
+      if (totalTests > 0) {
+        efficiency = (correctDetections / totalTests) * 100;
+      }
+
+      efficiencyEl.textContent = efficiency.toFixed(1);
+    });
+  </script>
+</body>
+</html>
